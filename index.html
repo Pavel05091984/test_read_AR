@@ -4,7 +4,7 @@
   <link rel="Site icon" href="icon/2248368.png" type="image/png" />
   <script src="js/aframe.min.js"></script>
   <script src="js/aframe-ar.js"></script>
-  <!--<script src="js/vr-mode-ui.js"></script>-->
+  <script src="js/animation-mixer.js"></script>
   <body style="margin: 0px; overflow: hidden">
     <a-scene
       embedded
@@ -15,12 +15,19 @@
         <a-asset-item id="hopper" src="model/mazda_rx-7_car/scene.gltf"></a-asset-item>
       </a-assets>
 
-      <a-marker type="barcode" value="0">
+      <a-marker type="barcode" value="0"
+        ><a-light
+          type="point"
+          color="#fff"
+          position="0 7 0"
+          intensity="1"
+        ></a-light>
         <a-entity
-          position="0 0 0"
+          position="-2.5 2 -1.5"
           rotation="0 0 0"
           scale="1 1 1"
           gltf-model="#hopper"
+          animation-mixer="loop: repeat"
         >
         </a-entity>
       </a-marker>
@@ -28,6 +35,7 @@
     </a-scene>
   </body>
 </html>
+
 
 
 
