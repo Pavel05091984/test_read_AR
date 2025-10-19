@@ -9,13 +9,13 @@
     <a-scene
       embedded
       vr-mode-ui="enabled: true;"
-      arjs="debugUIEnabled: false;"
+      arjs="debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
     >
       <a-assets>
         <a-asset-item id="hopper" src="model/mazda_rx-7_car/scene.gltf"></a-asset-item>
       </a-assets>
 
-      <a-marker type='barcode' value='0' >
+      <a-marker type="barcode" value="0">
         <a-entity
           position="0 0 0"
           rotation="0 0 0"
@@ -28,6 +28,7 @@
     </a-scene>
   </body>
 </html>
+
 
 
 
