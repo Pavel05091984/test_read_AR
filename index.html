@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebAR без A-Frame</title>
+  <title>AlvaAR + Three.js Пример</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; }
     #info {
@@ -16,141 +16,137 @@
       font-family: Arial, sans-serif;
       z-index: 100;
     }
-    #startButton {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 15px 30px;
-      font-size: 18px;
-      border: none;
-      background: #4285f4;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-      z-index: 101;
-    }
+    #video { display: none; } /* Скрываем видео, используем только для обработки */
   </style>
 </head>
 <body>
-  <div id="info">Наведите камеру на ровную поверхность с текстурой</div>
-  <button id="startButton">Запустить AR</button>
+  <div id="info">Загрузка AR-системы...</div>
+  <video id="video" autoplay muted playsinline></video>
 
-  <!-- Подключаем Three.js -->
+  <!-- Подключаем библиотеки -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.alvaar.com/sdk/v1/alvaar.js"></script>
 
   <script>
+    const video = document.getElementById('video');
     const info = document.getElementById('info');
-    const startButton = document.getElementById('startButton');
 
-    // Проверка поддержки WebXR
-    if (!navigator.xr) {
-      info.textContent = 'WebXR не поддерживается вашим браузером';
-      startButton.disabled = true;
-    } else {
-      navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-        if (!supported) {
-          info.textContent = 'AR не поддерживается вашим устройством';
-          startButton.disabled = true;
-        }
-      });
-    }
+    let alva = null;
+    let scene, camera, renderer, cube;
 
-    startButton.addEventListener('click', initXR);
-
-    async function initXR() {
+    async function init() {
       try {
-        // Скрываем кнопку запуска
-        startButton.style.display = 'none';
-
-        // Запрос AR-сессии с поддержкой обнаружения плоскостей
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['local-floor', 'hit-test']
+        // 1. Доступ к камере
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 }
         });
+        video.srcObject = stream;
 
-        // Создаём canvas для рендеринга
-        const canvas = document.createElement('canvas');
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        document.body.appendChild(canvas);
+        // Ждём загрузки видео
+        video.onloadedmetadata = async () => {
+          // 2. Инициализация AlvaAR
+          alva = await AlvaAR.Initialize(video.videoWidth, video.videoHeight);
+          info.textContent = 'Наведите камеру на ровную поверхность...';
 
-        // Получаем WebGL контекст
-        const gl = canvas.getContext('webgl2', { xrCompatible: true });
+          // 3. Настройка Three.js
+          setupThreeJS();
 
-        // Инициализируем Three.js
-        const renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera();
-
-        // Добавляем освещение
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        scene.add(directionalLight);
-
-        // Создаём объект для размещения (куб)
-        const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
-
-        // Переменная для хранения источника hit-test
-        let hitTestSource = null;
-
-        // Запрашиваем источник hit-test для обнаружения поверхностей
-        session.requestHitTestSource({
-          space: session.requestReferenceSpace('viewer')
-        }).then((source) => {
-          hitTestSource = source;
-        });
-
-        // Пространство координат
-        const referenceSpace = await session.requestReferenceSpace('local-floor');
-
-        // Основной цикл рендеринга WebXR
-        function onXRFrame(time, frame) {
-          const pose = frame.getViewerPose(referenceSpace);
-
-          if (pose) {
-            // Очистка экрана
-            gl.bindFramebuffer(gl.FRAMEBUFFER, session.renderState.baseLayer.framebuffer);
-            gl.viewport(0, 0, session.renderState.baseLayer.framebufferWidth, session.renderState.baseLayer.framebufferHeight);
-            renderer.render(scene, camera);
-
-            // Обработка hit-test результатов
-            if (hitTestSource) {
-              const hitTestResults = frame.getHitTestResults(hitTestSource);
-              if (hitTestResults.length > 0) {
-                const hit = hitTestResults[0];
-                const hitPose = hit.getPose(referenceSpace);
-                if (hitPose) {
-                  // Преобразуем матрицу позы в позицию Three.js
-                  const matrix = new THREE.Matrix4();
-                  matrix.fromArray(hitPose.transform.matrix);
-                  cube.position.setFromMatrixPosition(matrix);
-                  info.textContent = 'Объект размещён на поверхности!';
-                }
-              } else {
-                info.textContent = 'Наведите камеру на поверхность с текстурой';
-              }
-            }
-          }
-
-          // Запрашиваем следующий кадр
-          session.requestAnimationFrame(onXRFrame);
-        }
-
-        // Начинаем анимацию
-        session.requestAnimationFrame(onXRFrame);
-
+          // 4. Запуск основного цикла
+          requestAnimationFrame(animate);
+        };
       } catch (error) {
-        console.error('Ошибка AR:', error);
-        info.textContent = 'Не удалось запустить AR: ' + error.message;
+        console.error('Ошибка:', error);
+        info.textContent = 'Ошибка: ' + error.message;
       }
     }
+
+    function setupThreeJS() {
+      // Создаём сцену Three.js
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+
+      // Рендерер
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Освещение
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 10, 5);
+      scene.add(directionalLight);
+
+      // Создаём куб
+      const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Получаем данные с камеры
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+      const frame = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+
+      // 1. Определяем позицию камеры
+      const cameraPose = alva.findCameraPose(frame);
+      if (cameraPose) {
+        updateCameraPose(cameraPose);
+      }
+
+      // 2. Ищем плоскости
+      const planePose = alva.findPlane();
+      if (planePose) {
+        info.textContent = 'Плоскость обнаружена! Объект размещён.';
+        updateCubePosition(planePose);
+      } else {
+        info.textContent = 'Наведите камеру на ровную поверхность с текстурой...';
+      }
+
+      // Рендерим сцену
+      renderer.render(scene, camera);
+    }
+
+    function updateCameraPose(pose) {
+      // Преобразуем матрицу позы AlvaAR в позицию Three.js
+      const matrix = new THREE.Matrix4();
+      matrix.fromArray(pose.matrix);
+      camera.matrix.copy(matrix);
+      camera.matrixWorldNeedsUpdate = true;
+    }
+
+    function updateCubePosition(planePose) {
+      // Размещаем куб на обнаруженной плоскости
+      const matrix = new THREE.Matrix4();
+      matrix.fromArray(planePose.matrix);
+
+      // Слегка поднимаем куб над плоскостью
+      const position = new THREE.Vector3();
+      position.setFromMatrixPosition(matrix);
+      position.y += 0.15; // Высота куба — 0.3, делим пополам
+
+      cube.position.copy(position);
+
+      // Ориентируем куб по плоскости
+      const rotation = new THREE.Quaternion();
+      rotation.setFromRotationMatrix(matrix);
+      cube.quaternion.copy(rotation);
+    }
+
+    // Запускаем при загрузке страницы
+    window.addEventListener('load', init);
   </script>
 </body>
 </html>
