@@ -1,152 +1,156 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AlvaAR + Three.js Пример</title>
-  <style>
-    body { margin: 0; padding: 0; overflow: hidden; }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      background: rgba(0,0,0,0.7);
-      padding: 10px;
-      font-family: Arial, sans-serif;
-      z-index: 100;
-    }
-    #video { display: none; } /* Скрываем видео, используем только для обработки */
-  </style>
-</head>
-<body>
-  <div id="info">Загрузка AR-системы...</div>
-  <video id="video" autoplay muted playsinline></video>
-
-  <!-- Подключаем библиотеки -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://github.com/alanross/AlvaAR/blob/7796af500ee92001ac2a9888363ff64d7a3bee75/dist/alva_ar.js"></script>
-
-  <script>
-    const video = document.getElementById('video');
-    const info = document.getElementById('info');
-
-    let alva = null;
-    let scene, camera, renderer, cube;
-
-    async function init() {
-      try {
-        // 1. Доступ к камере
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 }
-        });
-        video.srcObject = stream;
-
-        // Ждём загрузки видео
-        video.onloadedmetadata = async () => {
-          // 2. Инициализация AlvaAR
-          alva = await AlvaAR.Initialize(video.videoWidth, video.videoHeight);
-          info.textContent = 'Наведите камеру на ровную поверхность...';
-
-          // 3. Настройка Three.js
-          setupThreeJS();
-
-          // 4. Запуск основного цикла
-          requestAnimationFrame(animate);
-        };
-      } catch (error) {
-        console.error('Ошибка:', error);
-        info.textContent = 'Ошибка: ' + error.message;
-      }
-    }
-
-    function setupThreeJS() {
-      // Создаём сцену Three.js
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
-
-      // Рендерер
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
-
-      // Освещение
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-      scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 10, 5);
-      scene.add(directionalLight);
-
-      // Создаём куб
-      const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-      cube = new THREE.Mesh(geometry, material);
-      scene.add(cube);
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Получаем данные с камеры
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
-      const frame = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
-
-      // 1. Определяем позицию камеры
-      const cameraPose = alva.findCameraPose(frame);
-      if (cameraPose) {
-        updateCameraPose(cameraPose);
+<!doctype html>
+<html>
+  <head>
+    <title>Управление движением</title>
+    <meta name="description" content="A-Frame Examples" />
+    <script src="js/aframe-master-v1.3.0.min.js"></script>
+    <script src="js/aframe-environment-component.min.js"></script>
+    <script src="js/extended-wasd-controls.js"></script>
+    <script src="js/joystick.js"></script>
+    <style>
+      body {
+        /* отключить длительное нажатие в iOS? */
+        -webkit-touch-callout: none;
       }
 
-      // 2. Ищем плоскости
-      const planePose = alva.findPlane();
-      if (planePose) {
-        info.textContent = 'Плоскость обнаружена! Объект размещён.';
-        updateCubePosition(planePose);
-      } else {
-        info.textContent = 'Наведите камеру на ровную поверхность с текстурой...';
+      .mainUI {
+        border: 0px solid pink;
+        position: fixed;
+        top: 0px;
+        width: 99%;
+        height: 99%;
+        z-index: 1;
+        pointer-events: none; /* разрешить переход по ссылке в прозрачных областях */
       }
 
-      // Рендерим сцену
-      renderer.render(scene, camera);
-    }
+      .regionUI {
+        border: 0px solid yellow;
+        position: absolute;
+        display: flex;
+        flex-direction: row;
+        pointer-events: none;
+      }
 
-    function updateCameraPose(pose) {
-      // Преобразуем матрицу позы AlvaAR в позицию Three.js
-      const matrix = new THREE.Matrix4();
-      matrix.fromArray(pose.matrix);
-      camera.matrix.copy(matrix);
-      camera.matrixWorldNeedsUpdate = true;
-    }
+      .buttonUI {
+        border: 0px solid lime;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        pointer-events: auto;
+        filter: drop-shadow(0px 0px 20px white);
+      }
 
-    function updateCubePosition(planePose) {
-      // Размещаем куб на обнаруженной плоскости
-      const matrix = new THREE.Matrix4();
-      matrix.fromArray(planePose.matrix);
+      .skyColor {
+        filter: hue-rotate(240deg) saturate(100%) brightness(100%)
+          drop-shadow(0px 0px 20px white);
+      }
 
-      // Слегка поднимаем куб над плоскостью
-      const position = new THREE.Vector3();
-      position.setFromMatrixPosition(matrix);
-      position.y += 0.15; // Высота куба — 0.3, делим пополам
+      .baseColor {
+        filter: hue-rotate(24deg) saturate(68%) brightness(100%)
+          drop-shadow(0px 0px 20px white);
+      }
 
-      cube.position.copy(position);
+      .grayColor {
+        filter: hue-rotate(0deg) saturate(0%) brightness(100%)
+          drop-shadow(0px 0px 20px white);
+      }
+    </style>
+  </head>
 
-      // Ориентируем куб по плоскости
-      const rotation = new THREE.Quaternion();
-      rotation.setFromRotationMatrix(matrix);
-      cube.quaternion.copy(rotation);
-    }
+  <body>
+    <!-- примечание: используя красные базовые изображения для кнопок, можно подкрасить (HSV) с помощью фильтра: оттенок-поворот(); и т.д. -->
 
-    // Запускаем при загрузке страницы
-    window.addEventListener('load', init);
-  </script>
-</body>
+    <div class="mainUI" id="uiDiv" oncontextmenu="return false;">
+      <!-- вверху слева -->
+      <div
+        class="regionUI skyColor"
+        style="top: 10px; left: 10px"
+        oncontextmenu="return false;"
+      ></div>
+
+      <!-- вверху справа -->
+      <div class="regionUI" style="top: 10px; right: 10px"></div>
+
+      <!-- внизу слева -->
+      <div class="regionUI" style="bottom: 10px; left: 10px">
+        <div class="buttonUI" style="width: 128px; opacity: 0.8">
+          <img src="image/Кнопка/joystick-base.png" />
+          <div id="stick1" style="position: absolute; left: 32px; top: 32px">
+            <img src="image/Кнопка/joystick-red.png" />
+          </div>
+        </div>
+      </div>
+
+      <!-- внизу справа -->
+      <div class="regionUI baseColor" style="bottom: 10px; right: 10px"></div>
+    </div>
+
+    <script>
+      // необходимо запустить javascript-код после загрузки объектов и компонентов a-scene
+      AFRAME.registerComponent("screen-controls", {
+        init: function () {
+          this.component =
+            document.getElementById("camera").components[
+              "extended-wasd-controls"
+            ];
+          this.joystick1 = new Joystick("stick1", 64, 8);
+          console.log("controls initialized");
+        },
+
+        tick: function (time, deltaTime) {
+          // console.log( joystick1.value )
+          // console.log( this.component.movePercent )
+          this.component.movePercent.x = this.joystick1.value.x;
+          this.component.movePercent.z = -this.joystick1.value.y;
+        },
+      });
+    </script>
+
+    <!-- 
+	отключить нажмите "F", чтобы перейти в полноэкранный режим
+отключите элементы управления WASD, подключенные к камере по умолчанию.
+ -->
+    <a-scene
+      keyboard-shortcuts="enterVR: false;"
+      vr-mode-ui="enabled: false;"
+      screen-controls
+    >
+      <a-assets>
+        <!-- добавление элементов управления внешним видом; автоматически устанавливает значение turnEnabled/lookEnabled равным false  -->
+        <a-asset-item
+          id="MTLB"
+          src="Тестовые/Новая папка/С наклейками-compressed_3.glb"
+        ></a-asset-item>
+      </a-assets>
+      <a-entity
+        light="type: directional; color: #ffffff; intensity: 8; castShadow: true"
+        position="0 10 -4"
+        rotation="-20 -45 0"
+      ></a-entity>
+      <a-plane
+        position="0 0 -4"
+        height="2"
+        width="2"
+        rotation="-90 0 0"
+        color="red"
+      ></a-plane>
+      <a-entity position="-1 0 -5">
+        <a-gltf-model
+          rotation="0 0 0"
+          position="0 0 0"
+          scale="8 8 8"
+          gltf-model="#MTLB"
+        >
+        </a-gltf-model>
+      </a-entity>
+      <a-entity
+        id="camera"
+        camera
+        look-controls
+        position="0 1.6 0"
+        extended-wasd-controls="flyEnabled: true; inputType: joystick;"
+      >
+      </a-entity>
+    </a-scene>
+  </body>
 </html>
