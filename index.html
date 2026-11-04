@@ -251,12 +251,7 @@
         renderer="colorManagement: true, physicallyCorrectLights"
         vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false">
-      <a-assets>
-        <img id="Аватар_без_фона" src="Img/аватар_2.png" />
-        <img id="инста" src="иконки/инста.png" />
-        <img id="ВКонтакте" src="иконки/ВК.png" />
-        <img id="Подпись" src="Img/Подпись.jpg" />
-      </a-assets>
+      
       <a-camera 
           position="0 0 0"
           look-controls="enabled: false"
@@ -287,13 +282,13 @@
           rotation="0 0 0"
           width="2"
           height="1"
-          src="#Подпись"
+          src="Img/Подпись.jpg"
         ></a-plane>
         <a-image
           opacity="0"
           position="1.7 1.1 0"
           rotation="0 0 0"
-          src="#Аватар_без_фона"
+          src="Img/аватар_2.png"
           width="1.15"
           height="1"
           animation="property: opacity; to: 1; dur: 1000; "
@@ -302,7 +297,7 @@
           opacity="0"
           position="-0.3 -0.8 0"
           rotation="0 0 0"
-          src="#инста"
+          src="иконки/инста.png"
           width="0.5"
           height="0.5"
           animation="property: opacity; to: 1; dur: 1000; "
@@ -311,7 +306,7 @@
           opacity="0"
           position="0.3 -0.8 0"
           rotation="0 0 0"
-          src="#ВКонтакте"
+          src="#иконки/ВК.png"
           width="0.46"
           height="0.46"
           animation="property: opacity; to: 1; dur: 1000; "
